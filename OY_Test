@@ -1,0 +1,212 @@
+--Create database
+
+create table oy_test (
+Id INT,
+customer_id INT,
+order_id VARCHAR(100),
+transaction_date TIMESTAMP,
+status VARCHAR(100),
+vendor VARCHAR(100)
+);
+
+insert
+	into
+	oy_test
+values
+(1,
+422818,
+'TEST000001',
+'2018-01-01 00:00:10',
+'SHIPPED',
+'Vendor A'),
+(2,
+181820,
+'TEST000002',
+'2018-01-01 00:10:10',
+'SHIPPED',
+'Vendor A'),
+(3,
+999019,
+'TEST000003',
+'2018-01-02 03:18:01',
+'CANCELLED',
+'Vendor A'),
+(4,
+1923192,
+'TEST000004',
+'2018-02-04 05:00:00',
+'CANCELLED',
+'Vendor C'),
+(5,
+645532,
+'TEST000005',
+'2018-02-10 16:00:10',
+'SHIPPED',
+'Vendor C'),
+(6,
+1101011,
+'TEST000006',
+'2018-02-11 11:00:11',
+'SHIPPED',
+'Vendor C'),
+(7,
+1020000,
+'TEST000007',
+'2018-02-10 00:00:00',
+'SHIPPED',
+'Vendor D'),
+(8,
+40111234,
+'TEST000008',
+'2018-03-11 06:30:11',
+'SHIPPED',
+'Vendor D'),
+(9,
+1923192,
+'TEST000009',
+'2018-03-12 10:00:11',
+'CANCELLED',
+'Vendor B'),
+(10,
+1101011,
+'TEST000010',
+'2018-03-12 15:30:12',
+'SHIPPED',
+'Vendor B'),
+(11,
+999019,
+'TEST000011',
+'2018-03-15 12:30:45',
+'CANCELLED',
+'Vendor A'),
+(12,
+645532,
+'TEST000012',
+'2018-04-01 09:30:22',
+'SHIPPED',
+'Vendor A'),
+(13,
+650013,
+'TEST000013',
+'2018-04-01 10:50:37',
+'SHIPPED',
+'Vendor C'),
+(14,
+777734,
+'TEST000014',
+'2018-04-02 13:45:19',
+'SHIPPED',
+'Vendor D');
+
+--1
+select
+	*
+from
+	oy_test
+where
+	date_trunc('month', transaction_date)::date = '2018-02-01'::date
+	and status ilike 'shipped';
+	
+--2
+select
+	*
+from
+	oy_test
+where
+	transaction_date between '2018-01-01'::date and '2018-05-01'::date
+	and (extract('hour'
+from
+	transaction_date) >= 00
+	and extract('hour'
+from
+	transaction_date) < 9);
+	
+	
+--3
+select
+	distinct on
+	(vendor) *
+from
+	oy_test
+order by
+	vendor,
+	transaction_date desc nulls last;
+	
+	
+--4
+select
+	id,
+	customer_id,
+	order_id,
+	transaction_date,
+	status,
+	vendor
+from
+	(
+	select
+		ot.*,
+		row_number() over (partition by vendor
+	order by
+		transaction_date desc) as transaction_rank
+	from
+		oy_test ot
+) x
+where
+	transaction_rank = 2;
+
+--5
+select
+	vendor,
+	transaction_date,
+	count(vendor) as cancelled_transaction
+from
+	oy_test
+where
+	status ilike 'cancelled'
+group by
+	vendor,
+	transaction_date;
+
+--6
+select
+	customer_id,
+	status,
+	count(customer_id) as shipped_count
+from
+	oy_test
+where
+	status ilike 'shipped'
+group by
+	customer_id,
+	status
+having
+	count(customer_id) > 1;
+
+--7
+select
+	vendor,
+	case
+		when count_shipped > 2
+		and count_cancel = 0 then 'Superb'
+		when count_shipped > 2
+		and count_cancel >= 1 then 'Good'
+		else 'Normal'
+	end as vendor_category,
+	total_volume
+from
+	(
+	select
+		vendor,
+		count(order_id) as total_volume,
+		count(case when status = 'CANCELLED' then status else null end) as count_cancel,
+		count(case when status = 'SHIPPED' then status else null end) as count_shipped
+	from
+		oy_test
+	group by
+		1
+	order by
+		1) x
+order by
+	count_shipped desc,
+	count_cancel asc,
+	total_volume desc;
